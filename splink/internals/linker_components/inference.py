@@ -599,9 +599,22 @@ class LinkerInference:
                         "`linker.table_management.register_term_frequency_lookup`."
                     )
 
-        sql = _join_new_table_to_df_concat_with_tf_sql(
-            self._linker, "__splink__df_new_records"
-        )
+        # TODO: understand if the fix here is going to have unintended downstream consequences
+        existing_cols = {c.unquote().name for c in new_records_df.columns}
+        required_tf_cols = {
+            f"tf_{tf_col.unquote().name}" for tf_col in self._linker._settings_obj._term_frequency_columns
+        }
+
+        if required_tf_cols.issubset(existing_cols):
+            sql = """
+                  select *
+                  from __splink__df_new_records \
+                  """
+        else:
+            sql = _join_new_table_to_df_concat_with_tf_sql(
+                self._linker, "__splink__df_new_records"
+            )
+
         pipeline.enqueue_sql(sql, "__splink__df_new_records_with_tf_before_uid_fix")
 
         pipeline = add_unique_id_and_source_dataset_cols_if_needed(

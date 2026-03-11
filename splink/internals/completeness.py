@@ -22,6 +22,7 @@ def completeness_data(
     table_names_for_chart: List[str] = None,
 ) -> list[dict[str, Any]]:
     pipeline = CTEPipeline()
+    float_type = db_api.sql_dialect.float_type_name
 
     sql = vertically_concatenate_sql(
         splink_df_dict, salting_required=False, source_dataset_input_column=None
@@ -69,7 +70,7 @@ def completeness_data(
             '{unquoted_col}' as column_name,
             count(*) - count({quoted_col}) as total_null_rows,
             count(*) as total_rows_inc_nulls,
-            cast(count({quoted_col})*1.0/count(*) as float) as completeness
+            cast(count({quoted_col})*1.0/count(*) as {float_type}) as completeness
         from __splink__df_concat_with_source_dataset
         group by {internal_source_colname}
         order by count(*) desc)

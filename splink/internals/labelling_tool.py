@@ -41,10 +41,22 @@ def generate_labelling_tool_comparisons(
           and {sds_col} = '{source_dataset}'
         """
 
+    uid_col = settings.column_info_settings.unique_id_column_name
+
+    if isinstance(unique_id, str):
+        try:
+            int(unique_id)
+            unique_id_sql = unique_id
+        except ValueError:
+            escaped = unique_id.replace("'", "''")
+            unique_id_sql = f"'{escaped}'"
+    else:
+        unique_id_sql = str(unique_id)
+
     sql = f"""
     select *
     from __splink__df_concat_with_tf
-    where {settings.column_info_settings.unique_id_column_name} = '{unique_id}'
+    where {uid_col} = {unique_id_sql}
     {source_dataset_condition}
     """
 
