@@ -7,6 +7,7 @@ from splink.internals.column_expression import ColumnExpression
 from splink.internals.datasets import splink_datasets
 from splink.internals.linker import Linker
 from splink.internals.settings_creator import SettingsCreator
+from splink.internals.trino.database_api import TrinoAPI
 
 # The following is a workaround for the fact that dependencies of particular backends
 # may not be installed, but we don't want this to prevent import
@@ -42,12 +43,16 @@ def __getattr__(name):
             from splink.internals.spark.database_api import SparkAPI
 
             return SparkAPI
+        elif name == "TrinoAPI":
+            from splink.internals.trino.database_api import TrinoAPI
+
+            return TrinoAPI
         elif name == "DuckDBAPI":
             from splink.internals.duckdb.database_api import DuckDBAPI
 
             return DuckDBAPI
     except ImportError as err:
-        if name in ["SparkAPI", "DuckDBAPI"]:
+        if name in ["SparkAPI", "DuckDBAPI", "TrinoAPI"]:
             raise ImportError(
                 f"{name} cannot be imported because its dependencies are not "
                 "installed. Please `pip install` the required package(s) as "
@@ -67,4 +72,5 @@ __all__ = [
     "SettingsCreator",
     "SparkAPI",
     "splink_datasets",
+    "TrinoAPI",
 ]
