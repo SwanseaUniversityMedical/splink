@@ -1,0 +1,80 @@
+version: "3.9"
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin123
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  mc:
+    image: minio/mc:latest
+    container_name: mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set local http://minio:9000 minioadmin123 minioadmin123) do
+        echo '...waiting for minio...' && sleep 2;
+      done;
+      /usr/bin/mc mb -p local/splink;
+      /usr/bin/mc anonymous set private local/splink;
+      tail -f /dev/null
+      "
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      POSTGRES_DB: metastore
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  hive-metastore:
+    image: harbor.ukserp.ac.uk/trino/hive:2.1.0
+    container_name: hive-metastore
+    hostname: hive-metastore
+    depends_on:
+      - postgres
+      - minio
+    environment:
+      METASTORE_DB_HOSTNAME: postgres
+      METASTORE_DB_PORT: 5432
+      METASTORE_DB_TYPE: postgres
+      AWS_ACCESS_KEY_ID: minioadmin123
+      AWS_SECRET_ACCESS_KEY: minioadmin123
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_PATH_STYLE_ACCESS: "true"
+    ports:
+      - "9083:9083"
+    volumes:
+      - ./hivems/metastore-site.xml:/opt/apache-hive-metastore-3.1.3-bin/conf/metastore-site.xml
+
+  trino:
+    image: trinodb/trino:latest
+    container_name: trino
+    depends_on:
+      - hive-metastore
+      - minio
+      - mc
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./trino/etc:/etc/trino
+      - ./trino/plugins/jaro:/usr/lib/trino/plugin/jaro-winkler
+
+volumes:
+  minio-data:
+  postgres-data:
+  hive-warehouse:
