@@ -39,6 +39,10 @@ class SplinkDialect(ABC):
         # because they're usually the same except e.g. athena vs presto
         return self.sql_dialect_str
 
+    @property
+    def float_type_name(self):
+        return "float"
+
     @classmethod
     def from_string(cls: type[Self], dialect_name: str) -> Self:
         # list of classes which match _dialect_name_for_factory
@@ -687,3 +691,138 @@ class AthenaDialect(SplinkDialect):
     @property
     def least_function_name(self):
         return "least"
+
+class TrinoDialect(SplinkDialect):
+    _dialect_name_for_factory = "trino"
+
+    @property
+    def sql_dialect_str(self):
+        return "trino"
+
+    @property
+    def float_type_name(self):
+        return "double"
+
+    @property
+    def levenshtein_function_name(self):
+        return "levenshtein_distance"
+
+    @property
+    def jaro_function_name(self):
+        return "jaro_similarity"
+
+    @property
+    def jaro_winkler_function_name(self):
+        return "jaro_winkler_similarity"
+
+    @property
+    def array_max_function_name(self):
+        return "array_max"
+
+    @property
+    def array_min_function_name(self):
+        return "array_min"
+
+    @property
+    def array_transform_function_name(self):
+        return "transform"
+
+    @property
+    def array_first_index(self):
+        return 1
+
+    @property
+    def greatest_function_name(self):
+        return "greatest"
+
+    @property
+    def least_function_name(self):
+        return "least"
+
+    # TODO: figure this out
+    @property
+    def default_date_format(self):
+        return "%Y-%m-%d"
+
+    # TODO: figure this out
+    @property
+    def default_timestamp_format(self):
+        return "%Y-%m-%dT%H:%M:%SZ"
+
+    # TODO: figure this out
+    def _try_parse_date_raw(self, name: str, date_format: str = None) -> str:
+        if date_format is None:
+            date_format = self.default_date_format
+        # return f"""try_strptime({name}, '{date_format}')"""
+        # TODO: this definitely isn't correct but I need to understand how and where it's being used/called
+        return f"""try_cast({name} AS DATE)"""
+
+    # TODO: figure this out
+    def _try_parse_timestamp_raw(self, name: str, timestamp_format: str = None) -> str:
+        if timestamp_format is None:
+            timestamp_format = self.default_timestamp_format
+        return f"""try_strptime({name}, '{timestamp_format}')"""
+
+
+    def array_intersect(self, clc: ArrayIntersectLevel) -> str:
+        clc.col_expression.sql_dialect = self
+        col = clc.col_expression
+        thres = clc.min_intersection
+        return f"cardinality(array_intersect({col.name_l}, {col.name_r})) >= {thres}"
+
+    def _regex_extract_raw(
+        self, name: str, pattern: str, capture_group: int = 0
+    ) -> str:
+        return f"regexp_extract({name}, '{pattern}', {capture_group})"
+
+    @property
+    def infinity_expression(self):
+        return "infinity()"
+
+    # TODO: Trino can't do repeatable with a seed, is this an issue?
+    def random_sample_sql(
+        self, proportion, sample_size, seed=None, table=None, unique_id=None
+    ):
+        if proportion == 1.0:
+            return ""
+        percent = proportion * 100
+        return f"TABLESAMPLE BERNOULLI ({percent})"
+
+    def access_extreme_array_element(
+        self, name: str, first_or_last: Literal["first", "last"]
+    ) -> str:
+        if first_or_last == "first":
+            return f"{name}[{self.array_first_index}]"
+        if first_or_last == "last":
+            return f"array_last({name})"
+        raise ValueError(
+            f"Argument 'first_or_last' should be 'first' or 'last', "
+            f"received: '{first_or_last}'"
+        )
+
+    def explode_arrays_sql(
+        self,
+        tbl_name: str,
+        columns_to_explode: list[str],
+        other_columns_to_retain: list[str],
+    ) -> str:
+        """Generated sql that explodes one or more columns in a table"""
+        columns_to_explode = columns_to_explode.copy()
+        other_columns_to_retain = other_columns_to_retain.copy()
+        # base case
+        if len(columns_to_explode) == 0:
+            return f"select {','.join(other_columns_to_retain)} from {tbl_name}"
+        else:
+            column_to_explode = columns_to_explode.pop()
+            cols_to_select = (
+                [f"unnest({column_to_explode}) as {column_to_explode}"]
+                + other_columns_to_retain
+                + columns_to_explode
+            )
+            other_columns_to_retain.append(column_to_explode)
+            return f"""select {','.join(cols_to_select)}
+                from ({self.explode_arrays_sql(tbl_name,columns_to_explode,other_columns_to_retain)})"""  # noqa: E501
+
+    @property
+    def cosine_similarity_function_name(self):
+        return "cosine_similarity"

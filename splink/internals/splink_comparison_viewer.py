@@ -22,11 +22,15 @@ def row_examples(
     uid_cols_l = [uid_col.name_l for uid_col in uid_cols]
     uid_cols_r = [uid_col.name_r for uid_col in uid_cols]
     uid_col_lr_names = uid_cols_l + uid_cols_r
-    uid_expr = " || '-' ||".join(uid_col_lr_names)
+    uid_expr = " || '-' || ".join(
+        [f"cast({col} as varchar)" for col in uid_col_lr_names]
+    )
 
     gamma_columns = [c._gamma_column_name for c in linker._settings_obj.comparisons]
 
-    gam_concat = " || ',' || ".join(gamma_columns)
+    gam_concat = " || ',' || ".join(
+        [f"cast({col} as varchar)" for col in gamma_columns]
+    )
 
     # See https://github.com/moj-analytical-services/splink/issues/1651
     # This ensures we have an average match weight that isn't affected by tf
